@@ -873,17 +873,22 @@ func Canonicalize(input interface{}, typeFilter []TypeID) (interface{}, error) {
 	}
 
 	/*
-	   ld package issues:
+		   ld package issues:
 
-	   	* Frame does not process lists correctly. It appears it loses their content after they have been flattened and then does
-	   	not later embed the content. Instead it results in a hanging node reference to their content.
+		   	* NewJsonLdApi does not accept a JsonLdOptions parameter as it documents. Instead it appears that JsonLdOptions is given to only
+			subset of JsonLdApi functions. This implies that only these functions make use of it.
+			For instance, only these use a Document Loader to resolve remote context/document references.
+			"NewJsonLdApi creates a new instance of JsonLdApi and initialises it with the given JsonLdOptions structure."
 
-	   	* The output of the Node jsonld module wraps a graph object around Frame output - this package does not.
+			* Frame does not process lists correctly. It appears it loses their content after they have been flattened and then does
+		   	not later embed the content. Instead it results in a hanging node reference to their content.
 
-	   	* It also does not do the 'empty context' compact as specified by the framing spec.
+		   	* The output of the Node jsonld module wraps a graph object around Frame output - this package does not.
 
-	   	* The spec is very unclear about how to construct the input frame and exactly what features it provides.
-	   	The ld package doesn't provide any additional description.
+		   	* It also does not do the 'empty context' compact as specified by the framing spec.
+
+		   	* The spec is very unclear about how to construct the input frame and exactly what features it provides.
+		   	The ld package doesn't provide any additional description.
 	*/
 	framed, err = ldapi.Frame(expanded, frame, nil)
 	if err != nil {
@@ -914,6 +919,7 @@ func Canonicalize(input interface{}, typeFilter []TypeID) (interface{}, error) {
 
 /*
 PrintDocument is the same as ld.PrintDocument - it prints the internal JSON LD Document as formatted JSON LD.
+It's here to eliminate the need to import the ld package.
 */
 func PrintDocument(msg string, document interface{}) {
 	ld.PrintDocument(msg, document)
