@@ -6,6 +6,7 @@ See standard go log package for more info.
 package log
 
 import (
+	"fmt"
 	golog "log"
 	"os"
 	"strconv"
@@ -43,10 +44,10 @@ func init() {
 	logger = golog.New(logFile, logPref, logFlgI)
 
 	if openErr != nil {
-		logger.Printf("Error opening log file with Name: %v Error: %v\n", logFileName, openErr)
+		fmt.Printf("Error opening log file with Name: %v Error: %v\n", logFileName, openErr)
 	}
 	if atoiErr != nil {
-		logger.Printf("Bad Log Flag: %v Error: %v\n ", logFlg, atoiErr)
+		fmt.Printf("Bad Log Flag: %v Error: %v\n ", logFlg, atoiErr)
 	}
 }
 
