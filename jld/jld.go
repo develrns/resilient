@@ -217,6 +217,27 @@ func NewL(s interface{}) map[string]interface{} {
 }
 
 /*
+GetP gets the property of a node
+*/
+func GetP(input interface{}, propID PropID) (interface{}, bool) {
+	var (
+		node  map[string]interface{}
+		propI interface{}
+		ok    bool
+	)
+
+	node, ok = input.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	propI, ok = node[propID.uri]
+	if !ok {
+		return nil, false
+	}
+	return propI, true
+}
+
+/*
 GetN gets the property of a node if it is a node
 */
 func GetN(input interface{}, propID PropID) (map[string]interface{}, bool) {
