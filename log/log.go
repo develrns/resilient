@@ -1,6 +1,6 @@
 /*
-Package log provides an logger that logs to the $LOG log file. If $LOG is not provided, stderr is used.
-$LOGPREF is the logging prefix and $LOGFLG is the logging flag. If $LOGFLG isn't provided, log.LstdFlags is used.
+Package log provides an logger that logs to the LOG log file. If LOG is not provided, stderr is used.
+LOGPREF is the logging prefix and LOGFLG is the logging flag. If LOGFLG isn't provided, log.LstdFlags is used.
 See standard go log package for more info.
 */
 package log
@@ -16,9 +16,9 @@ var logger *golog.Logger
 
 func init() {
 	var (
-		logFileName = os.Getenv("$LOG")
-		logPref     = os.Getenv("$LOGPREF")
-		logFlg      = os.Getenv("$LOGFLG")
+		logFileName = os.Getenv("LOG")
+		logPref     = os.Getenv("LOGPREF")
+		logFlg      = os.Getenv("LOGFLG")
 		logFlgI     int
 		logFile     *os.File
 		openErr     error

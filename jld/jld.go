@@ -494,6 +494,39 @@ func IsNref(input interface{}) bool {
 }
 
 /*
+IsType is true if the input is a node or a typed value object of the type t.
+*/
+func IsType(input interface{}, t TypeID) bool {
+	var (
+		o  map[string]interface{}
+		tv interface{}
+		ok bool
+	)
+
+	o, ok = input.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	tv, ok = o["@type"]
+	if !ok {
+		return false
+	}
+
+	switch tv.(type) {
+	case string:
+		return t.uri == tv.(string)
+	case []string:
+		for _, typeval := range tv.([]string) {
+			if t.uri == typeval {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+/*
 IsNtype is true if the input is a node and it is of type t.
 */
 func IsNtype(input interface{}, t TypeID) bool {
