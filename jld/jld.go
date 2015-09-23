@@ -10,6 +10,7 @@ import (
 	"github.com/develrns/resilient/log"
 
 	"github.com/kazarena/json-gold/ld"
+	"github.com/pborman/uuid"
 )
 
 var (
@@ -52,10 +53,6 @@ type (
 	IDer interface {
 		URI()
 	}
-)
-
-var (
-	bngen = ld.NewBlankNodeIDGenerator()
 )
 
 //NewTypeBase creates a new TypeBase.
@@ -128,10 +125,10 @@ func (pid PropID) URI() string {
 }
 
 /*
-BlankID creates a blank node identifier unique within this process.
+BlankID creates a unique blank node identifier.
 */
 func BlankID() string {
-	return bngen.GenerateBlankNodeIdentifier("")
+	return "_:" + (uuid.NewRandom().String())
 }
 
 /*
@@ -163,7 +160,7 @@ func NewN(id string, t TypeID) map[string]interface{} {
 
 	switch id {
 	case "":
-		node["@id"] = bngen.GenerateBlankNodeIdentifier("")
+		node["@id"] = BlankID()
 	default:
 		_, err = url.Parse(id)
 		if err != nil {
@@ -196,7 +193,7 @@ func AddN(input interface{}, id string, t TypeID) {
 
 		switch id {
 		case "":
-			node["@id"] = bngen.GenerateBlankNodeIdentifier("")
+			node["@id"] = BlankID()
 		default:
 			_, err = url.Parse(id)
 			if err != nil {
