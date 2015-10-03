@@ -35,23 +35,19 @@ type (
 	//Typically it ends in a "#" making it a domain containing fragment IDs.
 	TypeBase string
 
-	//TypeID holds the relative and URI forms of a JSON LD type identifier.
-	TypeID struct {
-		uri string
-	}
+	//TypeID is a JSON LD type identifier that is a URI.
+	TypeID string
 
 	//PropBase is an identifier base for a domain of JSON LD property identifiers.
 	//Typically it ends in a "#" making it a domain containing fragment IDs.
 	PropBase string
 
-	//PropID holds the relative and URI forms of a JSON LD property identifier.
-	PropID struct {
-		uri string
-	}
+	//PropID is a JSON LD property identifier that is a URI.
+	PropID string
 
-	//IDer is an interface for accessing a TypeID's or PropID's relative and URI values.
+	//IDer is an interface for accessing a TypeID's or PropID's URI as a string.
 	IDer interface {
-		URI()
+		URI() string
 	}
 )
 
@@ -82,12 +78,12 @@ func NewTypeID(id string, base TypeBase) TypeID {
 	if err != nil {
 		panic("Bad TypeID")
 	}
-	return TypeID{uri: uri}
+	return TypeID(uri)
 }
 
 //URI returns a TypeID's URI.
 func (tid TypeID) URI() string {
-	return tid.uri
+	return string(tid)
 }
 
 //NewPropBase creates a new PropBase.
@@ -116,12 +112,12 @@ func NewPropID(id string, base PropBase) PropID {
 	if err != nil {
 		panic("Bad PropID")
 	}
-	return PropID{uri: uri}
+	return PropID(uri)
 }
 
 //URI returns a PropID's URI.
 func (pid PropID) URI() string {
-	return pid.uri
+	return string(pid)
 }
 
 /*
@@ -137,7 +133,7 @@ int, float32, float64 or string value. Any other type of value returns a value o
 */
 func NewV(t TypeID, v interface{}) map[string]interface{} {
 	valobj := make(map[string]interface{}, 2)
-	valobj["@type"] = t.uri
+	valobj["@type"] = t
 	switch v.(type) {
 	case bool, int, float32, float64, string:
 		valobj["@value"] = v
@@ -150,13 +146,20 @@ func NewV(t TypeID, v interface{}) map[string]interface{} {
 /*
 NewN creates a node with @id and @type properties. If id is blank a blank node of the type is created.
 */
-func NewN(id string, t TypeID) map[string]interface{} {
+func NewN(id string, t ...TypeID) map[string]interface{} {
 	var (
 		node = make(map[string]interface{}, 2)
 		err  error
 	)
 
-	node["@type"] = t.uri
+	switch len(t) {
+	case 0:
+		return nil
+	case 1:
+		node["@type"] = t[0]
+	default:
+		node["@type"] = t
+	}
 
 	switch id {
 	case "":
@@ -189,7 +192,7 @@ func AddN(input interface{}, id string, t TypeID) {
 		if okID || okType {
 			panic("AddN to existing node")
 		}
-		node["@type"] = t.uri
+		node["@type"] = t
 
 		switch id {
 		case "":
@@ -227,7 +230,7 @@ func GetP(input interface{}, propID PropID) (interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -248,7 +251,7 @@ func GetN(input interface{}, propID PropID) (map[string]interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -272,7 +275,7 @@ func GetNtype(input interface{}, propID PropID, typeID TypeID) (map[string]inter
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -313,7 +316,7 @@ func GetSet(input interface{}, propID PropID) ([]interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -327,7 +330,7 @@ func GetSet(input interface{}, propID PropID) ([]interface{}, bool) {
 		array = make([]interface{}, 1)
 		slice = array[:]
 		slice[0] = propI
-		node[propID.uri] = slice
+		node[propID.URI()] = slice
 		return slice, true
 	}
 }
@@ -351,7 +354,7 @@ func GetList(input interface{}, propID PropID) ([]interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	listI, ok = node[propID.uri]
+	listI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -394,7 +397,7 @@ func GetVtype(input interface{}, propID PropID, typeID TypeID) (interface{}, boo
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -420,7 +423,7 @@ func GetString(input interface{}, propID PropID) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return "", false
 	}
@@ -459,7 +462,7 @@ func GetBool(input interface{}, propID PropID) (bool, bool) {
 	if !ok {
 		return false, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return false, false
 	}
@@ -512,10 +515,10 @@ func IsType(input interface{}, t TypeID) bool {
 
 	switch tv.(type) {
 	case string:
-		return t.uri == tv.(string)
+		return t.URI() == tv.(string)
 	case []string:
 		for _, typeval := range tv.([]string) {
-			if t.uri == typeval {
+			if t.URI() == typeval {
 				return true
 			}
 		}
@@ -545,10 +548,10 @@ func IsNtype(input interface{}, t TypeID) bool {
 
 	switch tv.(type) {
 	case string:
-		return t.uri == tv.(string)
+		return t.URI() == tv.(string)
 	case []string:
 		for _, typeval := range tv.([]string) {
-			if t.uri == typeval {
+			if t.URI() == typeval {
 				return true
 			}
 		}
@@ -580,7 +583,7 @@ func IsVtype(input interface{}, t TypeID) bool {
 
 	switch tv.(type) {
 	case string:
-		return t.uri == tv.(string)
+		return t.URI() == tv.(string)
 	default:
 		return false
 	}
@@ -677,7 +680,7 @@ func IsVtypeval(input interface{}, t TypeID, v interface{}) bool {
 
 	switch tv.(type) {
 	case string:
-		if t.uri != tv.(string) {
+		if t.URI() != tv.(string) {
 			return false
 		}
 	default:
@@ -796,7 +799,7 @@ func AddType(input interface{}, t TypeID) error {
 	if !ok {
 		return fmt.Errorf("Bad Node @type")
 	}
-	set[len(set)] = t.uri
+	set[len(set)] = t.URI()
 	return nil
 }
 
@@ -820,13 +823,13 @@ func Append(input interface{}, propID PropID, items ...interface{}) ([]interface
 	slice, okSet = GetSet(node, propID)
 	if okSet {
 		newSlice = append(slice, items...)
-		node[propID.uri] = newSlice
+		node[propID.URI()] = newSlice
 		return newSlice, nil
 	}
 	slice, okList = GetList(node, propID)
 	if okList {
 		newSlice = append(slice, items...)
-		listObj = node[propID.uri].(map[string]interface{})
+		listObj = node[propID.URI()].(map[string]interface{})
 		listObj["@list"] = newSlice
 		return newSlice, nil
 	}
@@ -913,7 +916,7 @@ func Canonicalize(input interface{}, typeFilter []TypeID) (interface{}, error) {
 	)
 
 	for i, typeID := range typeFilter {
-		types[i] = typeID.uri
+		types[i] = typeID.URI()
 	}
 	obj = map[string]interface{}{"@type": types}
 	frame = []interface{}{obj}
