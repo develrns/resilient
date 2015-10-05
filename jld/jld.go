@@ -23,6 +23,9 @@ var (
 	//TypeP is the @type PropID
 	TypeP = NewPropID("@type", "")
 
+	//IndexP is the @index PropID
+	IndexP = NewPropID("@index", "")
+
 	//ValueP is the @value PropID
 	ValueP = NewPropID("@value", "")
 
@@ -697,7 +700,7 @@ func IsVtypeval(input interface{}, t TypeID, v interface{}) bool {
 }
 
 /*
-IsVequal is true the two typed or untyped value objects are equal
+IsVequal is true if the two typed or untyped value objects are equal
 */
 func IsVequal(input1, input2 interface{}) bool {
 	var (
