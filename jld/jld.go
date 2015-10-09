@@ -906,72 +906,50 @@ If only one node matches the typeFilter, it is returned; if no nodes are matched
 */
 func Canonicalize(input interface{}, typeFilter []TypeID) (interface{}, error) {
 	var (
-		ldapi        = ld.NewJsonLdApi()
-		err          error
-		frame        []interface{}
-		obj          map[string]interface{}
-		types        = make([]interface{}, len(typeFilter))
-		expanded     interface{}
-		framed       interface{}
-		framedArray  []interface{}
-		compactInput interface{}
-		compacted    interface{}
+		jsonLdProcessor = ld.NewJsonLdProcessor()
+		err             error
+		frame           = make(map[string]interface{}, 1)
+		types           = make([]interface{}, len(typeFilter))
+		expanded        []interface{}
+		framed          map[string]interface{}
+		graph           []interface{}
 	)
 
+	//Convert the array of TypeIDs to an array of their URI values
 	for i, typeID := range typeFilter {
 		types[i] = typeID.URI()
 	}
-	obj = map[string]interface{}{"@type": types}
-	frame = []interface{}{obj}
 
-	expanded, err = ldapi.Expand(emptyCtx, "", input)
-	if err != nil {
-		return nil, err
-	}
-
-	/*
-		   ld package issues:
-
-		   	* NewJsonLdApi does not accept a JsonLdOptions parameter as it documents. Instead it appears that JsonLdOptions is given to only
-			subset of JsonLdApi functions. This implies that only these functions make use of it.
-			For instance, only these use a Document Loader to resolve remote context/document references.
-			"NewJsonLdApi creates a new instance of JsonLdApi and initialises it with the given JsonLdOptions structure."
-
-			* Frame does not process lists correctly. It appears it loses their content after they have been flattened and then does
-		   	not later embed the content. Instead it results in a hanging node reference to their content.
-
-		   	* The output of the Node jsonld module wraps a graph object around Frame output - this package does not.
-
-		   	* It also does not do the 'empty context' compact as specified by the framing spec.
-
-		   	* The spec is very unclear about how to construct the input frame and exactly what features it provides.
-		   	The ld package doesn't provide any additional description.
-	*/
-	framed, err = ldapi.Frame(expanded, frame, nil)
-	if err != nil {
-		return nil, err
-	}
-	switch framed.(type) {
-	case map[string]interface{}:
-		compactInput = framed
-	case []interface{}:
-		framedArray = framed.([]interface{})
-		switch len(framedArray) {
-		case 0:
-			return nil, nil
-		case 1:
-			compactInput = framedArray[0]
-		default:
-			compactInput = framed
-		}
+	//This code is a workaround for a bug in Frame that does not accept a frame with an @type that is an array
+	switch len(types) {
+	case 0:
+		frame = nil
+	case 1:
+		frame["@type"] = types[0]
 	default:
-		return nil, nil
+		panic("Currently Canonicalize is limited to one frame type")
 	}
-	compacted, err = ldapi.Compact(emptyCtx, "", compactInput, true)
+	//It should be replaced with the code below when the bug is fixed.
+	//frame["@type"] = types
+
+	expanded, err = jsonLdProcessor.Expand(input, nil)
 	if err != nil {
 		return nil, err
 	}
-	return compacted, nil
+
+	framed, err = jsonLdProcessor.Frame(expanded, frame, nil)
+	if err != nil {
+		return nil, err
+	}
+	graph = framed["@graph"].([]interface{})
+	switch len(graph) {
+	case 0:
+		return nil, nil
+	case 1:
+		return graph[0], nil
+	default:
+		return graph, nil
+	}
 }
 
 /*
