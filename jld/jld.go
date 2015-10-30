@@ -919,18 +919,7 @@ func Canonicalize(input interface{}, typeFilter []TypeID) (interface{}, error) {
 	for i, typeID := range typeFilter {
 		types[i] = typeID.URI()
 	}
-
-	//This code is a workaround for a bug in Frame that does not accept a frame with an @type that is an array
-	switch len(types) {
-	case 0:
-		frame = nil
-	case 1:
-		frame["@type"] = types[0]
-	default:
-		panic("Currently Canonicalize is limited to one frame type")
-	}
-	//It should be replaced with the code below when the bug is fixed.
-	//frame["@type"] = types
+	frame["@type"] = types
 
 	expanded, err = jsonLdProcessor.Expand(input, nil)
 	if err != nil {
