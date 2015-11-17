@@ -17,7 +17,7 @@ var logger *golog.Logger
 /*
 Config initializes the shared log instance. It should be called from an executable's init function. If it is not called, a default log instance that logs to os.Stderr is created.
 */
-func Config(logname, logpref string, logflg int) {
+func Config(logname, logprefix string, logflg int) {
 	var (
 		logFile *os.File
 		openErr error
@@ -32,7 +32,7 @@ func Config(logname, logpref string, logflg int) {
 		logFile = os.Stderr
 	}
 
-	logger = golog.New(logFile, logpref, logflg)
+	logger = golog.New(logFile, logprefix, logflg)
 
 	if openErr != nil {
 		logger.Printf("Logging to stderr because opening log file with Name: %v failed with Error: %v\n", logname, openErr)
