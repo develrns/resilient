@@ -1,6 +1,6 @@
 /*
 Package log provides a configured instance of a log package logger that is shared within an executable.
-Typically the executable will provide -log, -logpref and -logflg command line switches containing respectively the log file name, log prefix and log flag values.
+Typically the executable will provide -log, -logprefix and -logflg command line switches containing respectively the log file name, log prefix and log flag values.
 The executable's init will parse these command line flags and then configure this log instance with them.
 
 See standard go log package for more info.
