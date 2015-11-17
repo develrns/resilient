@@ -10,6 +10,7 @@ import (
 	"github.com/develrns/resilient/log"
 
 	"github.com/kazarena/json-gold/ld"
+	"github.com/pborman/uuid"
 )
 
 var (
@@ -21,6 +22,9 @@ var (
 
 	//TypeP is the @type PropID
 	TypeP = NewPropID("@type", "")
+
+	//IndexP is the @index PropID
+	IndexP = NewPropID("@index", "")
 
 	//ValueP is the @value PropID
 	ValueP = NewPropID("@value", "")
@@ -34,28 +38,20 @@ type (
 	//Typically it ends in a "#" making it a domain containing fragment IDs.
 	TypeBase string
 
-	//TypeID holds the relative and URI forms of a JSON LD type identifier.
-	TypeID struct {
-		uri string
-	}
+	//TypeID is a JSON LD type identifier that is a URI.
+	TypeID string
 
 	//PropBase is an identifier base for a domain of JSON LD property identifiers.
 	//Typically it ends in a "#" making it a domain containing fragment IDs.
 	PropBase string
 
-	//PropID holds the relative and URI forms of a JSON LD property identifier.
-	PropID struct {
-		uri string
-	}
+	//PropID is a JSON LD property identifier that is a URI.
+	PropID string
 
-	//IDer is an interface for accessing a TypeID's or PropID's relative and URI values.
+	//IDer is an interface for accessing a TypeID's or PropID's URI as a string.
 	IDer interface {
-		URI()
+		URI() string
 	}
-)
-
-var (
-	bngen = ld.NewBlankNodeIDGenerator()
 )
 
 //NewTypeBase creates a new TypeBase.
@@ -85,12 +81,12 @@ func NewTypeID(id string, base TypeBase) TypeID {
 	if err != nil {
 		panic("Bad TypeID")
 	}
-	return TypeID{uri: uri}
+	return TypeID(uri)
 }
 
 //URI returns a TypeID's URI.
 func (tid TypeID) URI() string {
-	return tid.uri
+	return string(tid)
 }
 
 //NewPropBase creates a new PropBase.
@@ -119,19 +115,19 @@ func NewPropID(id string, base PropBase) PropID {
 	if err != nil {
 		panic("Bad PropID")
 	}
-	return PropID{uri: uri}
+	return PropID(uri)
 }
 
 //URI returns a PropID's URI.
 func (pid PropID) URI() string {
-	return pid.uri
+	return string(pid)
 }
 
 /*
-BlankID creates a blank node identifier unique within this process.
+BlankID creates a unique blank node identifier.
 */
 func BlankID() string {
-	return bngen.GenerateBlankNodeIdentifier("")
+	return "_:" + (uuid.NewRandom().String())
 }
 
 /*
@@ -140,7 +136,7 @@ int, float32, float64 or string value. Any other type of value returns a value o
 */
 func NewV(t TypeID, v interface{}) map[string]interface{} {
 	valobj := make(map[string]interface{}, 2)
-	valobj["@type"] = t.uri
+	valobj["@type"] = t
 	switch v.(type) {
 	case bool, int, float32, float64, string:
 		valobj["@value"] = v
@@ -153,17 +149,24 @@ func NewV(t TypeID, v interface{}) map[string]interface{} {
 /*
 NewN creates a node with @id and @type properties. If id is blank a blank node of the type is created.
 */
-func NewN(id string, t TypeID) map[string]interface{} {
+func NewN(id string, t ...TypeID) map[string]interface{} {
 	var (
 		node = make(map[string]interface{}, 2)
 		err  error
 	)
 
-	node["@type"] = t.uri
+	switch len(t) {
+	case 0:
+		return nil
+	case 1:
+		node["@type"] = t[0]
+	default:
+		node["@type"] = t
+	}
 
 	switch id {
 	case "":
-		node["@id"] = bngen.GenerateBlankNodeIdentifier("")
+		node["@id"] = BlankID()
 	default:
 		_, err = url.Parse(id)
 		if err != nil {
@@ -192,11 +195,11 @@ func AddN(input interface{}, id string, t TypeID) {
 		if okID || okType {
 			panic("AddN to existing node")
 		}
-		node["@type"] = t.uri
+		node["@type"] = t
 
 		switch id {
 		case "":
-			node["@id"] = bngen.GenerateBlankNodeIdentifier("")
+			node["@id"] = BlankID()
 		default:
 			_, err = url.Parse(id)
 			if err != nil {
@@ -230,7 +233,7 @@ func GetP(input interface{}, propID PropID) (interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -251,7 +254,7 @@ func GetN(input interface{}, propID PropID) (map[string]interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -275,7 +278,7 @@ func GetNtype(input interface{}, propID PropID, typeID TypeID) (map[string]inter
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -316,7 +319,7 @@ func GetSet(input interface{}, propID PropID) ([]interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -330,7 +333,7 @@ func GetSet(input interface{}, propID PropID) ([]interface{}, bool) {
 		array = make([]interface{}, 1)
 		slice = array[:]
 		slice[0] = propI
-		node[propID.uri] = slice
+		node[propID.URI()] = slice
 		return slice, true
 	}
 }
@@ -354,7 +357,7 @@ func GetList(input interface{}, propID PropID) ([]interface{}, bool) {
 	if !ok {
 		return nil, false
 	}
-	listI, ok = node[propID.uri]
+	listI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -397,7 +400,7 @@ func GetVtype(input interface{}, propID PropID, typeID TypeID) (interface{}, boo
 	if !ok {
 		return nil, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return nil, false
 	}
@@ -423,7 +426,7 @@ func GetString(input interface{}, propID PropID) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return "", false
 	}
@@ -462,7 +465,7 @@ func GetBool(input interface{}, propID PropID) (bool, bool) {
 	if !ok {
 		return false, false
 	}
-	propI, ok = node[propID.uri]
+	propI, ok = node[propID.URI()]
 	if !ok {
 		return false, false
 	}
@@ -494,6 +497,39 @@ func IsNref(input interface{}) bool {
 }
 
 /*
+IsType is true if the input is a node or a typed value object of the type t.
+*/
+func IsType(input interface{}, t TypeID) bool {
+	var (
+		o  map[string]interface{}
+		tv interface{}
+		ok bool
+	)
+
+	o, ok = input.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	tv, ok = o["@type"]
+	if !ok {
+		return false
+	}
+
+	switch tv.(type) {
+	case string:
+		return t.URI() == tv.(string)
+	case []string:
+		for _, typeval := range tv.([]string) {
+			if t.URI() == typeval {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+/*
 IsNtype is true if the input is a node and it is of type t.
 */
 func IsNtype(input interface{}, t TypeID) bool {
@@ -515,10 +551,10 @@ func IsNtype(input interface{}, t TypeID) bool {
 
 	switch tv.(type) {
 	case string:
-		return t.uri == tv.(string)
+		return t.URI() == tv.(string)
 	case []string:
 		for _, typeval := range tv.([]string) {
-			if t.uri == typeval {
+			if t.URI() == typeval {
 				return true
 			}
 		}
@@ -550,7 +586,7 @@ func IsVtype(input interface{}, t TypeID) bool {
 
 	switch tv.(type) {
 	case string:
-		return t.uri == tv.(string)
+		return t.URI() == tv.(string)
 	default:
 		return false
 	}
@@ -647,7 +683,7 @@ func IsVtypeval(input interface{}, t TypeID, v interface{}) bool {
 
 	switch tv.(type) {
 	case string:
-		if t.uri != tv.(string) {
+		if t.URI() != tv.(string) {
 			return false
 		}
 	default:
@@ -664,7 +700,7 @@ func IsVtypeval(input interface{}, t TypeID, v interface{}) bool {
 }
 
 /*
-IsVequal is true the two typed or untyped value objects are equal
+IsVequal is true if the two typed or untyped value objects are equal
 */
 func IsVequal(input1, input2 interface{}) bool {
 	var (
@@ -766,7 +802,7 @@ func AddType(input interface{}, t TypeID) error {
 	if !ok {
 		return fmt.Errorf("Bad Node @type")
 	}
-	set[len(set)] = t.uri
+	set[len(set)] = t.URI()
 	return nil
 }
 
@@ -790,13 +826,13 @@ func Append(input interface{}, propID PropID, items ...interface{}) ([]interface
 	slice, okSet = GetSet(node, propID)
 	if okSet {
 		newSlice = append(slice, items...)
-		node[propID.uri] = newSlice
+		node[propID.URI()] = newSlice
 		return newSlice, nil
 	}
 	slice, okList = GetList(node, propID)
 	if okList {
 		newSlice = append(slice, items...)
-		listObj = node[propID.uri].(map[string]interface{})
+		listObj = node[propID.URI()].(map[string]interface{})
 		listObj["@list"] = newSlice
 		return newSlice, nil
 	}
@@ -870,72 +906,39 @@ If only one node matches the typeFilter, it is returned; if no nodes are matched
 */
 func Canonicalize(input interface{}, typeFilter []TypeID) (interface{}, error) {
 	var (
-		ldapi        = ld.NewJsonLdApi()
-		err          error
-		frame        []interface{}
-		obj          map[string]interface{}
-		types        = make([]interface{}, len(typeFilter))
-		expanded     interface{}
-		framed       interface{}
-		framedArray  []interface{}
-		compactInput interface{}
-		compacted    interface{}
+		jsonLdProcessor = ld.NewJsonLdProcessor()
+		err             error
+		frame           = make(map[string]interface{}, 1)
+		types           = make([]interface{}, len(typeFilter))
+		expanded        []interface{}
+		framed          map[string]interface{}
+		graph           []interface{}
 	)
 
+	//Convert the array of TypeIDs to an array of their URI values
 	for i, typeID := range typeFilter {
-		types[i] = typeID.uri
+		types[i] = typeID.URI()
 	}
-	obj = map[string]interface{}{"@type": types}
-	frame = []interface{}{obj}
+	frame["@type"] = types
 
-	expanded, err = ldapi.Expand(emptyCtx, "", input)
+	expanded, err = jsonLdProcessor.Expand(input, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	/*
-		   ld package issues:
-
-		   	* NewJsonLdApi does not accept a JsonLdOptions parameter as it documents. Instead it appears that JsonLdOptions is given to only
-			subset of JsonLdApi functions. This implies that only these functions make use of it.
-			For instance, only these use a Document Loader to resolve remote context/document references.
-			"NewJsonLdApi creates a new instance of JsonLdApi and initialises it with the given JsonLdOptions structure."
-
-			* Frame does not process lists correctly. It appears it loses their content after they have been flattened and then does
-		   	not later embed the content. Instead it results in a hanging node reference to their content.
-
-		   	* The output of the Node jsonld module wraps a graph object around Frame output - this package does not.
-
-		   	* It also does not do the 'empty context' compact as specified by the framing spec.
-
-		   	* The spec is very unclear about how to construct the input frame and exactly what features it provides.
-		   	The ld package doesn't provide any additional description.
-	*/
-	framed, err = ldapi.Frame(expanded, frame, nil)
+	framed, err = jsonLdProcessor.Frame(expanded, frame, nil)
 	if err != nil {
 		return nil, err
 	}
-	switch framed.(type) {
-	case map[string]interface{}:
-		compactInput = framed
-	case []interface{}:
-		framedArray = framed.([]interface{})
-		switch len(framedArray) {
-		case 0:
-			return nil, nil
-		case 1:
-			compactInput = framedArray[0]
-		default:
-			compactInput = framed
-		}
-	default:
+	graph = framed["@graph"].([]interface{})
+	switch len(graph) {
+	case 0:
 		return nil, nil
+	case 1:
+		return graph[0], nil
+	default:
+		return graph, nil
 	}
-	compacted, err = ldapi.Compact(emptyCtx, "", compactInput, true)
-	if err != nil {
-		return nil, err
-	}
-	return compacted, nil
 }
 
 /*
