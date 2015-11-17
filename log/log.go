@@ -1,32 +1,30 @@
 /*
-Package log provides an logger that logs to the $LOG log file. If $LOG is not provided, stderr is used.
-$LOGPREF is the logging prefix and $LOGFLG is the logging flag. If $LOGFLG isn't provided, log.LstdFlags is used.
+Package log provides a configured instance of a log package logger that is shared within an executable.
+Typically the executable will provide -log, -logpref and -logflg command line switches containing respectively the log file name, log prefix and log flag values.
+The executable's init will parse these command line flags and then configure this log instance with them.
+
 See standard go log package for more info.
 */
 package log
 
 import (
-	"fmt"
 	golog "log"
 	"os"
-	"strconv"
 )
 
 var logger *golog.Logger
 
-func init() {
+/*
+Config initializes the shared log instance. It should be called from an executable's init function. If it is not called, a default log instance that logs to os.Stderr is created.
+*/
+func Config(logname, logpref string, logflg int) {
 	var (
-		logFileName = os.Getenv("$LOG")
-		logPref     = os.Getenv("$LOGPREF")
-		logFlg      = os.Getenv("$LOGFLG")
-		logFlgI     int
-		logFile     *os.File
-		openErr     error
-		atoiErr     error
+		logFile *os.File
+		openErr error
 	)
 
-	if logFileName != "" {
-		logFile, openErr = os.Create(logFileName)
+	if logname != "" {
+		logFile, openErr = os.Create(logname)
 		if openErr != nil {
 			logFile = os.Stderr
 		}
@@ -34,26 +32,19 @@ func init() {
 		logFile = os.Stderr
 	}
 
-	if logFlg != "" {
-		logFlgI, atoiErr = strconv.Atoi(logFlg)
-	}
-	if logFlg == "" || atoiErr != nil {
-		logFlgI = golog.LstdFlags
-	}
-
-	logger = golog.New(logFile, logPref, logFlgI)
+	logger = golog.New(logFile, logpref, logflg)
 
 	if openErr != nil {
-		fmt.Printf("Error opening log file with Name: %v Error: %v\n", logFileName, openErr)
-	}
-	if atoiErr != nil {
-		fmt.Printf("Bad Log Flag: %v Error: %v\n ", logFlg, atoiErr)
+		logger.Printf("Logging to stderr because opening log file with Name: %v failed with Error: %v\n", logname, openErr)
 	}
 }
 
 /*
-Logger returns the rns logger
+Logger returns the shared logger
 */
 func Logger() *golog.Logger {
+	if logger == nil {
+		Config("", "", 0)
+	}
 	return logger
 }
