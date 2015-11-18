@@ -105,6 +105,16 @@ func (l *LoggerT) Printf(format string, v ...interface{}) {
 }
 
 /*
+Logger returns the internal instance of the golang log.Logger so that it can be passed to http.Server
+*/
+func (l *LoggerT) Logger() *golog.Logger {
+	if l.logger == nil {
+		Config("", "", 0)
+	}
+	return (l.logger)
+}
+
+/*
 Fatal delegates to the shared golang logger
 */
 func (l *LoggerT) Println(v ...interface{}) {
