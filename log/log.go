@@ -31,77 +31,77 @@ func (l *LoggerT) Fatal(v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Fatal(v)
+	l.logger.Fatal(v...)
 }
 
 /*
-Fatal delegates to the shared golang logger
+Fatalf delegates to the shared golang logger
 */
 func (l *LoggerT) Fatalf(format string, v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Fatalf(format, v)
+	l.logger.Fatalf(format, v...)
 }
 
 /*
-Fatal delegates to the shared golang logger
+Fatalln delegates to the shared golang logger
 */
 func (l *LoggerT) Fatalln(v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Fatalln(v)
+	l.logger.Fatalln(v...)
 }
 
 /*
-Fatal delegates to the shared golang logger
+Panic delegates to the shared golang logger
 */
 func (l *LoggerT) Panic(v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Panic(v)
+	l.logger.Panic(v...)
 }
 
 /*
-Fatal delegates to the shared golang logger
+Panicf delegates to the shared golang logger
 */
 func (l *LoggerT) Panicf(format string, v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Panicf(format, v)
+	l.logger.Panicf(format, v...)
 }
 
 /*
-Fatal delegates to the shared golang logger
+Panicln delegates to the shared golang logger
 */
 func (l *LoggerT) Panicln(v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Panicln(v)
+	l.logger.Panicln(v...)
 }
 
 /*
-Fatal delegates to the shared golang logger
+Print delegates to the shared golang logger
 */
 func (l *LoggerT) Print(v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Print(v)
+	l.logger.Print(v...)
 }
 
 /*
-Fatal delegates to the shared golang logger
+Printf delegates to the shared golang logger
 */
 func (l *LoggerT) Printf(format string, v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Printf(format, v)
+	l.logger.Printf(format, v...)
 }
 
 /*
@@ -121,7 +121,7 @@ func (l *LoggerT) Println(v ...interface{}) {
 	if l.logger == nil {
 		Config("", "", 0)
 	}
-	l.logger.Println(v)
+	l.logger.Println(v...)
 }
 
 /*
