@@ -1,6 +1,6 @@
 /*
-package aead uses aead crypto to encrypt and authenticate context composed of a plaintext metadata string and a plaintext data string.
-An encryption results in a string literal of the form <b64data>.<b64ciphertext>.<b64nonce>. The user of this package must supply a
+package aead uses aead crypto to encrypt and authenticate content composed of a plaintext metadata string and a plaintext data string.
+An encryption results in a string literal of the form <b64metadata>.<b64ciphertext>.<b64nonce>. The user of this package must supply a
 crypto.AEAD created with the same key in order to encrypt, transmit and decrypt a literal produced by Encrypt.
 */
 package aead
@@ -14,13 +14,15 @@ import (
 	"strings"
 )
 
-//Encrypt generates an AEAD literal of the form <b64data>.<b64ciphertext>.<b64nonce> given an AEAD
-func Encrypt(aeadCipher cipher.AEAD, data, plaintext string) (string, error) {
+//Encrypt generates a literal of the form <b64metadatdata>.<b64ciphertext>.<b64nonce> given an AEAD, a metadata string and a data
+//string. Only the data is encrypted - the metadata must be appropriate to expose in the clear. Each call generates a random
+//nonce of the length required by the aeadCipher.
+func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 
 	var (
 		nonce         = make([]byte, aeadCipher.NonceSize())
 		ciphertext    []byte
-		b64data       []byte
+		b64metadata   []byte
 		b64ciphertext []byte
 		b64nonce      []byte
 		buf           bytes.Buffer
@@ -33,19 +35,19 @@ func Encrypt(aeadCipher cipher.AEAD, data, plaintext string) (string, error) {
 		return "", err
 	}
 
-	//Seal encrypts the plaintext using the key and nonce and appends an authentication code for the additional data
-	ciphertext = aeadCipher.Seal(ciphertext, nonce, []byte(plaintext), []byte(data))
+	//Seal encrypts the data using the aeadCipher's key and the nonce and appends an authentication code for the metadata
+	ciphertext = aeadCipher.Seal(ciphertext, nonce, []byte(data), []byte(metadata))
 
-	//Base64 Encode data, ciphertext and nonce
-	b64data = make([]byte, base64.StdEncoding.EncodedLen(len([]byte(data))))
-	base64.StdEncoding.Encode(b64data, []byte(data))
+	//Base64 Encode metadata, ciphertext and nonce
+	b64metadata = make([]byte, base64.StdEncoding.EncodedLen(len([]byte(metadata))))
+	base64.StdEncoding.Encode(b64metadata, []byte(metadata))
 	b64ciphertext = make([]byte, base64.StdEncoding.EncodedLen(len(ciphertext)))
 	base64.StdEncoding.Encode(b64ciphertext, ciphertext)
 	b64nonce = make([]byte, base64.StdEncoding.EncodedLen(len(nonce)))
 	base64.StdEncoding.Encode(b64nonce, nonce)
 
-	//Compose a <b64data>.<b64ciphertext>.<b64nonce> literal
-	buf.Write(b64data)
+	//Compose a <b64metadata>.<b64ciphertext>.<b64nonce> literal
+	buf.Write(b64metadata)
 	buf.Write([]byte("."))
 	buf.Write(b64ciphertext)
 	buf.Write([]byte("."))
@@ -55,28 +57,28 @@ func Encrypt(aeadCipher cipher.AEAD, data, plaintext string) (string, error) {
 	return string(buf.Bytes()), nil
 }
 
-//Decrypt decrypts an AEAD literal of the form <b64data>.<b64ciphertext>.<b64nonce> given an AEAD
-//producing data, plaintext
+//Decrypt decrypts a literal of the form <b64metadata>.<b64ciphertext>.<b64nonce> given an AEAD and
+//producing metadata, data strings
 func Decrypt(aeadCipher cipher.AEAD, literal string) (string, string, error) {
 	var (
 		literalSubStrings []string
-		data              []byte
+		metadata          []byte
 		ciphertext        []byte
 		nonce             []byte
-		plaintext         []byte
+		data              []byte
 		err               error
 	)
 
-	//Split the literal into its base64 encoded data, ciphertext and nonce components
+	//Split the literal into its base64 encoded metadata, ciphertext and nonce components
 	literalSubStrings = strings.Split(literal, ".")
 	if len(literalSubStrings) != 3 {
 		return "", "", fmt.Errorf("Bad AEAD Literal: %v\n", literal)
 	}
 
-	//Decode the data, ciphertext and nonce
-	data, err = base64.StdEncoding.DecodeString(literalSubStrings[0])
+	//Decode the metadata, ciphertext and nonce
+	metadata, err = base64.StdEncoding.DecodeString(literalSubStrings[0])
 	if err != nil {
-		return "", "", fmt.Errorf("Decode data failed: %v\n", literal)
+		return "", "", fmt.Errorf("Decode metadata failed: %v\n", literal)
 	}
 	ciphertext, err = base64.StdEncoding.DecodeString(literalSubStrings[1])
 	if err != nil {
@@ -87,11 +89,11 @@ func Decrypt(aeadCipher cipher.AEAD, literal string) (string, string, error) {
 		return "", "", fmt.Errorf("Decode nonce failed: %v\n", literal)
 	}
 
-	//Open validates the integrity of the additional data using the authentication code appended to the ciphertext
+	//Open validates the integrity of the metadata using the authentication code in the ciphertext
 	//and, if valid, decrypts the ciphertext
-	plaintext, err = aeadCipher.Open(plaintext, nonce, ciphertext, data)
+	data, err = aeadCipher.Open(data, nonce, ciphertext, metadata)
 	if err != nil {
 		return "", "", err
 	}
-	return string(data), string(plaintext), nil
+	return string(metadata), string(data), nil
 }
