@@ -1,6 +1,6 @@
 /*
 package aead uses aead crypto to encrypt and authenticate content composed of a plaintext metadata string and a plaintext data string.
-An encryption results in a string literal of the form <b64metadata>.<b64ciphertext>.<b64nonce>. The user of this package must supply a
+An encryption results in a string literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce>. The user of this package must supply a
 crypto.AEAD created with the same key in order to encrypt, transmit and decrypt a literal produced by Encrypt.
 */
 package aead
@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-//Encrypt generates a literal of the form <b64metadatdata>.<b64ciphertext>.<b64nonce> given an AEAD, a metadata string and a data
+//Encrypt generates a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD, a metadata string and a data
 //string. Only the data is encrypted - the metadata must be appropriate to expose in the clear. Each call generates a random
 //nonce of the length required by the aeadCipher.
 func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
@@ -46,7 +46,7 @@ func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 	b64nonce = make([]byte, base64.URLEncoding.EncodedLen(len(nonce)))
 	base64.URLEncoding.Encode(b64nonce, nonce)
 
-	//Compose a <b64metadata>.<b64ciphertext>.<b64nonce> literal
+	//Compose a <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> literal
 	buf.Write(b64metadata)
 	buf.Write([]byte("."))
 	buf.Write(b64ciphertext)
@@ -57,7 +57,7 @@ func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 	return string(buf.Bytes()), nil
 }
 
-//Decrypt decrypts a literal of the form <b64metadata>.<b64ciphertext>.<b64nonce> given an AEAD and
+//Decrypt decrypts a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD and
 //producing metadata, data strings
 func Decrypt(aeadCipher cipher.AEAD, literal string) (string, string, error) {
 	var (
