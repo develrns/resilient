@@ -39,12 +39,12 @@ func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 	ciphertext = aeadCipher.Seal(ciphertext, nonce, []byte(data), []byte(metadata))
 
 	//Base64 Encode metadata, ciphertext and nonce
-	b64metadata = make([]byte, base64.StdEncoding.EncodedLen(len([]byte(metadata))))
+	b64metadata = make([]byte, base64.URLEncoding.EncodedLen(len([]byte(metadata))))
 	base64.StdEncoding.Encode(b64metadata, []byte(metadata))
-	b64ciphertext = make([]byte, base64.StdEncoding.EncodedLen(len(ciphertext)))
-	base64.StdEncoding.Encode(b64ciphertext, ciphertext)
-	b64nonce = make([]byte, base64.StdEncoding.EncodedLen(len(nonce)))
-	base64.StdEncoding.Encode(b64nonce, nonce)
+	b64ciphertext = make([]byte, base64.URLEncoding.EncodedLen(len(ciphertext)))
+	base64.URLEncoding.Encode(b64ciphertext, ciphertext)
+	b64nonce = make([]byte, base64.URLEncoding.EncodedLen(len(nonce)))
+	base64.URLEncoding.Encode(b64nonce, nonce)
 
 	//Compose a <b64metadata>.<b64ciphertext>.<b64nonce> literal
 	buf.Write(b64metadata)
@@ -76,15 +76,15 @@ func Decrypt(aeadCipher cipher.AEAD, literal string) (string, string, error) {
 	}
 
 	//Decode the metadata, ciphertext and nonce
-	metadata, err = base64.StdEncoding.DecodeString(literalSubStrings[0])
+	metadata, err = base64.URLEncoding.DecodeString(literalSubStrings[0])
 	if err != nil {
 		return "", "", fmt.Errorf("Decode metadata failed: %v\n", literal)
 	}
-	ciphertext, err = base64.StdEncoding.DecodeString(literalSubStrings[1])
+	ciphertext, err = base64.URLEncoding.DecodeString(literalSubStrings[1])
 	if err != nil {
 		return "", "", fmt.Errorf("Decode ciphertext failed: %v\n", literal)
 	}
-	nonce, err = base64.StdEncoding.DecodeString(literalSubStrings[2])
+	nonce, err = base64.URLEncoding.DecodeString(literalSubStrings[2])
 	if err != nil {
 		return "", "", fmt.Errorf("Decode nonce failed: %v\n", literal)
 	}
