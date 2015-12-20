@@ -1,19 +1,21 @@
 /*
-Package log provides a configured instance of a log package logger that is shared within an executable.
+Package oplog provides a configured instance of a log package logger that is shared within an executable.
+It is used to log operational events and instrumentation that will typically be aggregated and anaylyzed by
+operational log analysis tools. Therefore, it should not be used for debug logging, etc.
 
-Typically the executable will provide -log, -logprefix and -logflg command line switches containing respectively
+Typically the executable will provide -oplog, -oplogprefix and -oplogflg command line switches containing respectively
 the log file name, log prefix and log flag values.
 The executable's init will parse these command line flags and then configure this log instance with them.
 
-See the golang log package for a definition of the oplogflg bits that are ore'ed to form a flag value.
-
 If Config is not called, the default is to log to stderr with no prefix and no flag.
+
+See the golang log package for a definition of the oplogflg bits that are ore'ed to form a flag value.
 
 Due to initialization order issues, this logger cannot be used in init() functions.
 
 See standard go log package for more info.
 */
-package log
+package oplog
 
 import (
 	golog "log"
