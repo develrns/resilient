@@ -7,6 +7,7 @@ package aead
 
 import (
 	"bytes"
+	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
@@ -14,9 +15,43 @@ import (
 	"strings"
 )
 
-//Encrypt generates a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD, a metadata string and a data
-//string. Only the data is encrypted - the metadata must be appropriate to expose in the clear. Each call generates a random
-//nonce of the length required by the aeadCipher.
+/*
+NewAEADCipher creates a new AEAD cipher using an aes cipher created with a 32 byte random key for use with this package
+*/
+func NewAEADCipher() (cipher.AEAD, error) {
+	var (
+		key         = make([]byte, 32)
+		cipherBlock cipher.Block
+		aeadCipher  cipher.AEAD
+		err         error
+	)
+
+	//Create a new key
+	_, err = rand.Read(key)
+	if err != nil {
+		return nil, err
+	}
+	//The key is used to create an AES Cipher Block
+	cipherBlock, err = aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	//The AES Cipher Block is used to create an AEAD GCM which is a 128-bit, block cipher wrapped
+	//in a Galois Counter Mode with the standard nonce length.
+	//This is used to encrypt/decrypt all subscriber identifiers in the hidden fields of TBD 2nd Factor Selection Forms.
+	aeadCipher, err = cipher.NewGCM(cipherBlock)
+	if err != nil {
+		return nil, err
+	}
+	return aeadCipher, nil
+}
+
+/*
+Encrypt generates a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD, a metadata string and a data
+string. Only the data is encrypted - the metadata must be appropriate to expose in the clear. Each call generates a random
+nonce of the length required by the aeadCipher.
+*/
 func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 
 	var (
@@ -57,8 +92,10 @@ func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 	return string(buf.Bytes()), nil
 }
 
-//Decrypt decrypts a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD and
-//producing metadata, data strings
+/*
+Decrypt decrypts a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD and
+producing metadata, data strings
+*/
 func Decrypt(aeadCipher cipher.AEAD, literal string) (string, string, error) {
 	var (
 		literalSubStrings []string
