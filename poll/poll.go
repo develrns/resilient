@@ -1,15 +1,31 @@
 /*
-Package poll manages long polling for async results.
+Package poll manages passing a results channel to an async HTTP long-polling result request; and, optionally to
+an async 'producing' results request. It can also be used for similar use cases such as passing a redirect 'return'
+URL to a redirect request.
 
-The host name of a State's pollBaseURI must not be load balanced since its poll State is not available to any other service instances.
+A long-polling request is passed its result via a results channel.
 
-It is assumed that the a poll request and the code producing the result are executing as separate gofunctions. The poll state is used
-by both to synchronize and send the result from the request execution gofunction to the poll request HTTP handler via an interface{} channel.
-One poll state is used to handle the result synchronization for each request.
+This channel is allocated by the request that initiated the async workflow that produces the result.
+The NewState function allocates this channel as a property of a State and associates it with a type 4 UUID key.
+The long-poll request path to receive the result is formed by appending this UUID as the last element of a long-poll
+base path.
+
+When the long-poll request is received, it retrieves its key's State using GetState.
+
+The result may be produced by either a background gofunction or delivered by a 'producing' request.
+
+If a background gofunction is used, it is passed the State whose channel it eventually uses to send the results
+to the long-poll request.
+
+If a producing request is used, its path is formed in the same way as the long-poll request path and it uses GetState
+in the same way to retrieve its channel and send its results to the long-poll request.
+
+States that are over 1 hour old are deleted from the states map.
 */
 package poll
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -24,7 +40,7 @@ func init() {
 	go purgeTicker()
 }
 
-//Purge poll states that have been abandoned
+//purgeTicker purges abandoned States once per hour
 func purgeTicker() {
 	var ticker = time.NewTicker(time.Hour)
 
@@ -35,38 +51,56 @@ func purgeTicker() {
 
 }
 
-type statesT struct {
+//states holds active long-poll states. Since many HTTP requests and gofunctions will be concurrently
+//mutating a states table, it must be mutexed.
+type states struct {
 	m sync.Mutex
 	s map[string]*State
 }
 
-//Only one instance of the states table per server is required.
-//States holds the active redirect states. Since many HTTP requests will be mutating this state table, it must be mutexed.
+//The States Table that holds all the long-poll channels for a server.
 var States = newStates(1000)
 
-func newStates(capacity int) *statesT {
-	var states statesT
+//newStates allocates a states table
+func newStates(capacity int) *states {
+	var states states
 	states.s = make(map[string]*State, capacity)
 	return &states
 }
 
 //addState adds a state to the state table
-func (ss *statesT) addState(state *State, pollPath string) {
+func (ss *states) addState(state *State, key string) {
 	ss.m.Lock()
 	defer ss.m.Unlock()
-	ss.s[pollPath] = state
+	ss.s[key] = state
 	return
 }
 
-//State retrieves a state in the state table. This is used by a poll handler to wait for the arrival of the State's result.
-func (ss *statesT) State(pollURI string) (*State, bool) {
+//GetState retrieves a state from the States table.
+//keyOrPath may be a key UUID or a URI path whose last element is the UUID.
+func (ss *states) GetState(keyOrPath string) (*State, bool) {
 	var (
-		state *State
-		ok    bool
+		state    *State
+		elements []string
+		key      string
+		ok       bool
 	)
+
+	//Extract key from keyOrPath
+	elements = strings.Split(keyOrPath, "/")
+	switch len(elements) {
+	case 0:
+		return nil, false
+	case 1:
+		key = keyOrPath
+	default:
+		key = elements[len(elements)-1]
+	}
+
+	//Lookup State by key
 	ss.m.Lock()
 	defer ss.m.Unlock()
-	state, ok = ss.s[pollURI]
+	state, ok = ss.s[key]
 	if !ok {
 		return nil, false
 	}
@@ -74,15 +108,19 @@ func (ss *statesT) State(pollURI string) (*State, bool) {
 }
 
 //delState deletes a state from the state table
-func (ss *statesT) delState(key string) {
+func (ss *states) delState(key string) {
 	ss.m.Lock()
 	defer ss.m.Unlock()
 	delete(ss.s, key)
 	return
 }
 
-//purgeAbandonedStates deletes abandoned states from the state table
-func (ss *statesT) purgeAbandonedStates() {
+//purgeAbandonedStates deletes all State instances that are over an hour old from the States table.
+//Note that a state and/or its channel may still be referenced by a producing/consuming gofunction after
+//it has been removed from the States table. A common case will be that a producer will produce the result
+//and exit. At that point, if the State for that results channel has been deleted from the States table the State and
+//its channel will be garbage collected.
+func (ss *states) purgeAbandonedStates() {
 	ss.m.Lock()
 	defer ss.m.Unlock()
 	for key, state := range ss.s {
@@ -94,55 +132,40 @@ func (ss *statesT) purgeAbandonedStates() {
 }
 
 /*
-State manages the long polling between a requestor and a server.
-The requestor uses an HTTP long poll to wait for the arrival of a request's result.
-The server must provide an HTTP handler for receiving the poll GET requests to the request specific poll paths.
-The server is this poll State.
+A State holds the result channel for sending an async result to an HTTP long-poll result request.
+Done uses its key to remove it from the States table. purgeAbandonedStates uses its created time to
+determine if a State has been abandoned.
 
-The sequence of events is as follows:
+State may be read concurrently. It must not be changed once it has been created.
 
-1. Create a State giving it a base URI a SubjectDN identifying the poller. the requestor is given a 202 Accept response with a
-Location header set to the pollURI.
-
-2. When a long poll request is received, look up the state by calling States.State and receive its channel.
-The request executor will send the result on this channel when it is available. When the result arrives, respond with it.
-It is possible that that a poll will timeout while waiting for the state. If so, the requestor must resend it.
-The poll request must not delete the state if its poll response fails; otherwise, call Done to remove the state.
+In this scenario a channel that holds a single value is sufficient because only one send to the channel will be done.
 */
 type State struct {
-	C         chan interface{}
-	subjectDN string
-	pollPath  string
-	created   time.Time
+	C       chan interface{}
+	Key     string
+	created time.Time
 }
 
 /*
-NewState creates a new poll State; puts it in the server state table; and, returns the state and its pollPath.
+NewState creates a new State; puts it in the States table and returns it.
 */
-func NewState(pathBase, subjectDN string) (*State, string) {
+func NewState() *State {
 	var (
 		key   = uuid.NewRandom().String()
 		state State
 	)
-	state.C = make(chan interface{})
-	state.subjectDN = subjectDN
-	state.pollPath = pathBase + key
+	state.C = make(chan interface{}, 1)
+	state.Key = key
 	state.created = time.Now()
-	States.addState(&state, state.pollPath)
-	return &state, state.pollPath
+	States.addState(&state, key)
+	return &state
 }
 
 /*
-SubjectDN returns the Subject DN of the requestor for which this poll state was created.
-*/
-func (s *State) SubjectDN() string {
-	return s.subjectDN
-}
-
-/*
-Done deletes the state from the state table.
+Done deletes the State from the States table. Once a long-poll request has retrieved its results channel from a State,
+it should call Done.
 */
 func (s *State) Done() {
-	States.delState(s.pollPath)
+	States.delState(s.Key)
 	return
 }
