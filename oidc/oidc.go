@@ -12,8 +12,6 @@ This RP supports concurrent processing of /login requests; however, a particular
 can only have one request in process at a time because the state for a request is
 stored in an a single encrypted cookie.
 
-If a /login request provides both a clientid and secret query parameters these override the default command flag values.
-
 On receipt of a /login request, the following steps occur:
 
 (1) The RP issues an OpenID Connect Authn Request as a redirect to the
@@ -39,8 +37,8 @@ used to identify this RP to the TNaaS OP.
 The service accepts the following command flags in either '-' or '--' form:
 	-exthost   	- the public hostname of this RP
 	-ophost		- the host name of this RP's OpenID Connect Authentication Server
-	-clientid	- the default OpenID Connect client ID of this RP
-	-secret		- the default client ID's secret this RP shares with its OP
+	-clientid	- the OpenID Connect client ID of this RP
+	-secret		- the secret this RP shares with its OP
 	-scope		- the list of optional, space delimited Authn Request scope values; the full list is "profile email address phone"
 	-log       	- The log file name
 	-logprefix 	- The logging prefix
@@ -83,10 +81,8 @@ type (
 
 	//AuthnReqState is the content of an Authn Request cookie set by this RP
 	AuthnReqState struct {
-		ClientID string
-		Secret   string
-		State    string
-		Nonce    string
+		State string
+		Nonce string
 	}
 )
 
@@ -95,11 +91,11 @@ var (
 	logger = log.Logger()
 
 	//Command flags
-	exthost               string
-	ophost                string
-	defaultClientID       string
-	defaultOpSharedSecret string
-	scope                 string
+	exthost        string
+	ophost         string
+	clientID       string
+	opSharedSecret string
+	scope          string
 
 	//The HTTPS client used to issue OP requests
 	opClient *http.Client
@@ -125,8 +121,8 @@ func init() {
 
 	flag.StringVar(&exthost, "exthost", "", "the public hostname of this RP")
 	flag.StringVar(&ophost, "ophost", "", "the host name of this RP's OpenID Connect Authentication Server")
-	flag.StringVar(&defaultClientID, "clientid", "", "the default OpenID Connect client ID of this RP")
-	flag.StringVar(&defaultOpSharedSecret, "secret", "", "the default client ID's secret this RP shares with its OP")
+	flag.StringVar(&clientID, "clientid", "", "the OpenID Connect client ID of this RP")
+	flag.StringVar(&opSharedSecret, "secret", "", "the secret this RP shares with its OP")
 	flag.StringVar(&scope, "scope", "", `the list of optional, space delimited Authn Request scope values; the full list is "profile email address phone"`)
 	flag.StringVar(&logFileName, "log", "", "log file name (default stdout)")
 	flag.StringVar(&logPrefix, "logprefix", "", "logging prefix")
@@ -149,6 +145,13 @@ func writeError(w http.ResponseWriter, err error) {
 }
 
 /*
+keyfunc is a jwt.Keyfunc that supplies the opSharedSecret to validate ID Tokens provided by the OP Token Endpoint
+*/
+func keyfunc(t *jwt.Token) (interface{}, error) {
+	return []byte(opSharedSecret), nil
+}
+
+/*
 handleLogin implements an RP login request. This is expected to be a GET issued by a browser user agent.
 
 It initiates an OpenID Connect Authentication Request contained in the query string of a redirect to an OP Authentication
@@ -163,29 +166,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		authnReqStateBytes []byte
 		authnCookie        http.Cookie
 		authnCookieValue   string
-		clientID           = defaultClientID
-		secret             = defaultOpSharedSecret
-		values             url.Values
 		err                error
 	)
 
 	if r.Method != "GET" {
 		writeError(w, fmt.Errorf("Bad HTTP Method: %v", r.Method))
-		return
-	}
-
-	//If the request provides clientid and secret parameters these override the default values
-	values = r.URL.Query()
-	clientIDs, okClientIDs := values["clientid"]
-	if okClientIDs {
-		clientID = clientIDs[0]
-	}
-	secrets, okSecrets := values["secret"]
-	if okSecrets {
-		secret = secrets[0]
-	}
-	if okClientIDs != okSecrets {
-		writeError(w, fmt.Errorf("Both clientid and secret query parameters must be provided"))
 		return
 	}
 
@@ -195,7 +180,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	//The authnReqState is aead encrypted to produce a value stored as an authn cookie. This value transmits the oidState to the Authn Response while maintaining its privacy and integrity
 	//from any prying eyes that may exist in the browser.
-	authnReqState = AuthnReqState{ClientID: clientID, Secret: secret, State: oidState, Nonce: oidNonce}
+	authnReqState = AuthnReqState{State: oidState, Nonce: oidNonce}
 	authnReqStateBytes, _ = json.Marshal(&authnReqState)
 	authnCookieValue, err = aead.Encrypt(aeadCipher, "AuthnReqState", string(authnReqStateBytes))
 	if err != nil {
@@ -244,7 +229,7 @@ func handleAuthnToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//The authnCookie contains the aead encrypted AuthnReqState
+	//The authnCookie contains the aead encrypted oidState
 	authnCookie, err = r.Cookie("authnCookie")
 	if err != nil {
 		writeError(w, fmt.Errorf("Missing authnCookie\n"))
@@ -256,22 +241,21 @@ func handleAuthnToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.Unmarshal([]byte(authnReqStateString), &authnReqState)
-	fmt.Println("AuthnReqState: ", authnReqState)
 
 	//Validate that the oidState values match
-	authnRespStates, ok := authnRespParams["state"]
+	authnRespStateList, ok := authnRespParams["state"]
 	if !ok {
 		writeError(w, fmt.Errorf("Missing Authn Response State\n"))
 		return
 	}
-	switch len(authnRespStates) {
+	switch len(authnRespStateList) {
 	case 1:
-		if authnReqState.State != authnRespStates[0] {
-			writeError(w, fmt.Errorf("State match failed\nexpected state: %v\nprovided state: %v\n", authnReqState.State, authnRespStates[0]))
+		if authnReqState.State != authnRespStateList[0] {
+			writeError(w, fmt.Errorf("State match failed\nexpected state: %v\nprovided state: %v\n", authnReqState.State, authnRespStateList[0]))
 			return
 		}
 	default:
-		writeError(w, fmt.Errorf("Authn Response State has %v values", len(authnRespStates)))
+		writeError(w, fmt.Errorf("Authn Response State has %v values", len(authnRespStateList)))
 		return
 	}
 	if authnReqState.State != authnRespParams["state"][0] {
@@ -287,26 +271,26 @@ func handleAuthnToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//One Authorization Code must be provided
-	authnRespCodes, ok := authnRespParams["code"]
+	authnRespCodeList, ok := authnRespParams["code"]
 	if !ok {
 		writeError(w, fmt.Errorf("Missing Authn Response Authorization Code"))
 		return
 	}
-	if len(authnRespCodes) != 1 {
-		writeError(w, fmt.Errorf("Authn Response Authorization Code has %v values\n", len(authnRespStates)))
+	if len(authnRespCodeList) != 1 {
+		writeError(w, fmt.Errorf("Authn Response Authorization Code has %v values\n", len(authnRespStateList)))
 		return
 	}
 
 	//Issue the Token Request to the OP Token Endpoint. TNaaS OPs always use client_secret_jwt client authentication.
 	requestTime := time.Now().UTC()
-	clientAssertion.Claims = map[string]interface{}{"iss": authnReqState.ClientID, "sub": authnReqState.ClientID, "aud": opTokenEndpoint, "jti": uuid.NewRandom().String(), "exp": requestTime.Add(time.Minute * 10).String(), "iat": requestTime.String()}
+	clientAssertion.Claims = map[string]interface{}{"iss": clientID, "sub": clientID, "aud": opTokenEndpoint, "jti": uuid.NewRandom().String(), "exp": requestTime.Add(time.Minute * 10).String(), "iat": requestTime.String()}
 	fmt.Println("Client Assertion Claims: ", clientAssertion.Claims)
-	clientAssertionString, err := clientAssertion.SignedString([]byte(authnReqState.Secret))
+	clientAssertionString, err := clientAssertion.SignedString([]byte(opSharedSecret))
 	if err != nil {
 		writeError(w, fmt.Errorf("Client Assertion Signing Error: %v", err))
 		return
 	}
-	tokenRequestForm := url.Values{"grant_type": {"authorization_code"}, "code": {authnRespParams["code"][0]}, "client_id": {authnReqState.ClientID}, "client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}, "client_assertion": {clientAssertionString}, "redirect_uri": {"https://" + exthost + "/authn-token"}}
+	tokenRequestForm := url.Values{"grant_type": {"authorization_code"}, "code": {authnRespParams["code"][0]}, "client_id": {clientID}, "client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}, "client_assertion": {clientAssertionString}, "redirect_uri": {"https://" + exthost + "/authn-token"}}
 	tokenRsp, err := opClient.PostForm(opTokenEndpoint, tokenRequestForm)
 	if err != nil {
 		writeError(w, fmt.Errorf("Token Endpoint Form Post Error: %v", err))
@@ -340,9 +324,7 @@ func handleAuthnToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("Missing Token Response ID Token"))
 		return
 	}
-	idToken, err = jwt.Parse(tokenRspBody.IDToken, func(t *jwt.Token) (interface{}, error) {
-		return []byte(authnReqState.Secret), nil
-	})
+	idToken, err = jwt.Parse(tokenRspBody.IDToken, keyfunc)
 	if err != nil {
 		writeError(w, fmt.Errorf("ID Token Parsing Failed with Error: %v", err))
 		return
@@ -388,7 +370,7 @@ func handleAuthnToken(w http.ResponseWriter, r *http.Request) {
 	for key, val := range idToken.Claims {
 		claimsJSON = claimsJSON + `"` + key + `": "` + fmt.Sprint(val) + `",`
 	}
-	claimsJSON = claimsJSON[:len(headerJSON)-2] + "}"
+	claimsJSON = claimsJSON[:len(claimsJSON)-2] + "}"
 
 	idTokenJSON := `{"header": ` + headerJSON + `, "claims": ` + claimsJSON + "}"
 	resultJSON := `{"idtoken": ` + idTokenJSON + `, "userinfo": ` + string(userInfoRspBodyBytes) + "}"
