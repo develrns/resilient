@@ -1,7 +1,6 @@
 /*
-package aead uses aead crypto to encrypt and authenticate content composed of a plaintext metadata string and a plaintext data string.
-An encryption results in a string literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce>. The user of this package must supply a
-crypto.AEAD created with the same key in order to encrypt, transmit and decrypt a literal produced by Encrypt.
+package aead uses AEAD crypto with AES keys to encrypt and authenticate content composed of a plaintext metadata string and a plaintext data string.
+An encryption results in a string literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce>.
 */
 package aead
 
@@ -16,21 +15,36 @@ import (
 )
 
 /*
-NewAEADCipher creates a new AEAD cipher using an aes cipher created with a 32 byte random key for use with this package
+NewAEADCipher creates a new AEAD cipher using the provided AES key.
+The key argument should be either 16, 24, or 32 bytes to select AES-128, AES-192, or AES-256.
+
+If the key is nil, a new 32 byte AES key is generated.
+This option is used when the scope of key use is limited to within a single program execution.
 */
-func NewAEADCipher() (cipher.AEAD, error) {
+func NewAEADCipher(key []byte) (cipher.AEAD, error) {
 	var (
-		key         = make([]byte, 32)
+		keyval      []byte
 		cipherBlock cipher.Block
 		aeadCipher  cipher.AEAD
 		err         error
 	)
 
-	//Create a new key
-	_, err = rand.Read(key)
-	if err != nil {
-		return nil, err
+	//If no key is provided, generate one.
+	if key == nil {
+		keyval = make([]byte, 32)
+		_, err = rand.Read(keyval)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		switch len(key) {
+		case 16, 24, 36:
+		default:
+			return nil, fmt.Errorf("An aead key must be of length 16. 24, or 32. This key is of length: ", len(key))
+		}
+		keyval = key
 	}
+
 	//The key is used to create an AES Cipher Block
 	cipherBlock, err = aes.NewCipher(key)
 	if err != nil {
@@ -48,9 +62,9 @@ func NewAEADCipher() (cipher.AEAD, error) {
 }
 
 /*
-Encrypt generates a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD, a metadata string and a data
+Encrypt generates a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD cipher, a metadata string and a data
 string. Only the data is encrypted - the metadata must be appropriate to expose in the clear. Each call generates a random
-nonce of the length required by the aeadCipher.
+nonce of the length required by the cipher.
 */
 func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 
@@ -93,8 +107,8 @@ func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 }
 
 /*
-Decrypt decrypts a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD and
-producing metadata, data strings
+Decrypt decrypts a literal of the form <b64URLmetadata>.<b64URLciphertext>.<b64URLnonce> given an AEAD cipher and
+produces a metadata and data string.
 */
 func Decrypt(aeadCipher cipher.AEAD, literal string) (string, string, error) {
 	var (
