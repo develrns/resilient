@@ -46,7 +46,7 @@ func NewAEADCipher(key []byte) (cipher.AEAD, error) {
 	}
 
 	//The key is used to create an AES Cipher Block
-	cipherBlock, err = aes.NewCipher(key)
+	cipherBlock, err = aes.NewCipher(keyval)
 	if err != nil {
 		return nil, err
 	}
