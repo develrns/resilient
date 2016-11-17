@@ -89,7 +89,7 @@ func Encrypt(aeadCipher cipher.AEAD, metadata, data string) (string, error) {
 
 	//Base64 Encode metadata, ciphertext and nonce
 	b64metadata = make([]byte, base64.URLEncoding.EncodedLen(len([]byte(metadata))))
-	base64.StdEncoding.Encode(b64metadata, []byte(metadata))
+	base64.URLEncoding.Encode(b64metadata, []byte(metadata))
 	b64ciphertext = make([]byte, base64.URLEncoding.EncodedLen(len(ciphertext)))
 	base64.URLEncoding.Encode(b64ciphertext, ciphertext)
 	b64nonce = make([]byte, base64.URLEncoding.EncodedLen(len(nonce)))
