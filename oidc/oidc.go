@@ -396,7 +396,7 @@ func main() {
 		return
 	}
 
-	//Initialize an HTTPS capable client and replace the default aws HTTP client that doesn't support HTTPS
+	//Initialize an HTTPS capable client
 	certPool = x509.NewCertPool()
 	certPool.AppendCertsFromPEM([]byte(certbndl.PemCerts))
 	opClient = &http.Client{
